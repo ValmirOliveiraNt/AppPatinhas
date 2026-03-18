@@ -1,0 +1,7 @@
+{
+  "name": "Patinhas de Emaús",
+  "description": "Portal de gestão e identificação de membros para o grupo de proteção animal Patinhas de Emaús.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
