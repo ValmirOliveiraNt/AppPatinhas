@@ -36,22 +36,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onBack, onEditMember }) 
   const [filter, setFilter] = useState<'all' | 'valida' | 'vencida'>('all');
   const [confirmAction, setConfirmAction] = useState<{ id: string; type: 'delete' | 'markPaid' } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [adminProfile, setAdminProfile] = useState<{ full_name: string } | null>(null);
-  const { isMaster, isAdmin, user } = useSupabase();
-
-  useEffect(() => {
-    const fetchAdminProfile = async () => {
-      if (user) {
-        const { data } = await getSupabase()!
-          .from('profiles')
-          .select('full_name')
-          .eq('id', user.id)
-          .single();
-        if (data) setAdminProfile(data);
-      }
-    };
-    fetchAdminProfile();
-  }, [user]);
+  const { isMaster, isAdmin, user, profile } = useSupabase();
 
   const loadData = React.useCallback(async () => {
     try {
@@ -118,7 +103,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onBack, onEditMember }) 
   const handleMarkPaid = async (id: string) => {
     const originalMembers = [...members];
     const originalStats = { ...stats };
-    const adminName = adminProfile?.full_name || 'Administrador';
+    const adminName = profile?.full_name || 'Administrador';
     
     // Atualização otimista
     setMembers(prev => prev.map(m => m.id === id ? { ...m, status: 'valida', lastPaymentDate: new Date().toISOString(), approvedByName: adminName } : m));
@@ -153,7 +138,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onBack, onEditMember }) 
 
   const handleApproveRegistration = async (id: string) => {
     const originalMembers = [...members];
-    const adminName = adminProfile?.full_name || 'Administrador';
+    const adminName = profile?.full_name || 'Administrador';
     
     // Atualização otimista
     setMembers(prev => prev.map(m => m.id === id ? { ...m, status: 'vencida', approvedByName: adminName } : m));
@@ -166,28 +151,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onBack, onEditMember }) 
       setMembers(originalMembers);
       console.error('Error approving registration:', error);
       setError(`Erro ao aprovar cadastro: ${error?.message || 'Erro desconhecido'}`);
-    }
-  };
-
-  const handleUpdateRole = async (id: string, newRole: string) => {
-    const originalMembers = [...members];
-    setMembers(prev => prev.map(m => m.id === id ? { ...m, role: newRole } : m));
-
-    try {
-      await dbService.updateMemberRole(id, newRole);
-      setError(null);
-      await loadData();
-    } catch (error: any) {
-      setMembers(originalMembers);
-      console.error('Error updating role:', error);
-      setError(`Erro ao atualizar cargo: ${error?.message || 'Erro desconhecido'}`);
-      
-      // Log full error object for debugging
-      try {
-        console.error('Detailed error info:', JSON.parse(JSON.stringify(error, Object.getOwnPropertyNames(error))));
-      } catch (e) {
-        console.error('Could not stringify error:', error);
-      }
     }
   };
 
@@ -441,6 +404,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onBack, onEditMember }) 
                     </span>
                   </div>
                   <p className="text-[10px] text-gray-500 font-mono">{member.memberId}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <p className="text-[8px] text-gray-400 uppercase font-bold">Cargo:</p>
+                    <p className="text-[9px] text-emerald-600 font-bold uppercase">{member.role}</p>
+                  </div>
                   <div className="flex items-center gap-2 mt-1">
                     <p className="text-[8px] text-gray-400 uppercase font-bold">Último Pix:</p>
                     <p className="text-[9px] text-gray-600 font-bold">{member.lastPaymentDate ? new Date(member.lastPaymentDate).toLocaleDateString('pt-BR') : 'Nunca'}</p>

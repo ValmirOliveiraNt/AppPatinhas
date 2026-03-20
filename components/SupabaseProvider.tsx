@@ -4,8 +4,15 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { getSupabase } from '@/lib/supabase';
 import { User } from '@supabase/supabase-js';
 
+interface Profile {
+  id: string;
+  full_name: string | null;
+  role: string | null;
+}
+
 interface SupabaseContextType {
   user: User | null;
+  profile: Profile | null;
   loading: boolean;
   isAdmin: boolean;
   isMaster: boolean;
@@ -19,6 +26,7 @@ interface SupabaseContextType {
 
 const SupabaseContext = createContext<SupabaseContextType>({
   user: null,
+  profile: null,
   loading: true,
   isAdmin: false,
   isMaster: false,
@@ -34,6 +42,7 @@ export const useSupabase = () => useContext(SupabaseContext);
 
 export const SupabaseProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isMaster, setIsMaster] = useState(false);
@@ -79,7 +88,7 @@ export const SupabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       const { data, error } = await supabase
         .from('profiles')
-        .select('role')
+        .select('*')
         .eq('id', userId)
         .single();
       
@@ -97,6 +106,7 @@ export const SupabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           console.warn('Aviso: Erro de permissão ou perfil não encontrado. Usando nível básico.');
           setIsAdmin(false);
           setIsMaster(false);
+          setProfile(null);
           return;
         }
         throw error;
@@ -104,9 +114,10 @@ export const SupabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       setDbReady(true);
       if (data) {
+        setProfile(data);
         const userRole = data.role;
-        setIsMaster(userRole === 'master');
-        setIsAdmin(userRole === 'diretoria' || userRole === 'master');
+        setIsMaster(userRole === 'master' || userRole === 'admin');
+        setIsAdmin(userRole === 'diretoria' || userRole === 'master' || userRole === 'admin');
       }
 
       // Também verifica se tem perfil de membro
@@ -144,6 +155,7 @@ export const SupabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       
       setIsAdmin(false);
       setIsMaster(false);
+      setProfile(null);
     }
   }, []);
 
@@ -184,6 +196,7 @@ export const SupabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         checkAdminStatus(session.user.id);
       } else {
         setIsAdmin(false);
+        setProfile(null);
       }
       setLoading(false);
     });
@@ -193,8 +206,42 @@ export const SupabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     };
   }, [checkAdminStatus]);
 
+  useEffect(() => {
+    const supabase = getSupabase();
+    if (!supabase || !user) return;
+
+    // Listen for real-time changes to the user's profile
+    const channel = supabase
+      .channel(`profile_changes_${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'profiles',
+          filter: `id=eq.${user.id}`
+        },
+        (payload) => {
+          console.log('Real-time profile update detected:', payload.new);
+          if (payload.new) {
+            setProfile(payload.new as Profile);
+            if (payload.new.role) {
+              const userRole = payload.new.role;
+              setIsMaster(userRole === 'master' || userRole === 'admin');
+              setIsAdmin(userRole === 'diretoria' || userRole === 'master' || userRole === 'admin');
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
+
   return (
-    <SupabaseContext.Provider value={{ user, loading, isAdmin, isMaster, hasProfile, dbReady, connectionError, configError, retryConnection, refreshProfile }}>
+    <SupabaseContext.Provider value={{ user, profile, loading, isAdmin, isMaster, hasProfile, dbReady, connectionError, configError, retryConnection, refreshProfile }}>
       {children}
     </SupabaseContext.Provider>
   );

@@ -38,6 +38,9 @@ export const Login: React.FC = () => {
     const supabase = getSupabase();
     if (!supabase) return;
     
+    const trimmedEmail = email.trim();
+    const lowerEmail = trimmedEmail.toLowerCase();
+    
     setLoading(true);
     setError(null);
     setShowResend(false);
@@ -45,7 +48,7 @@ export const Login: React.FC = () => {
     try {
       if (isSignUp) {
         const { data, error } = await supabase.auth.signUp({
-          email,
+          email: trimmedEmail,
           password,
         });
         if (error) throw error;
@@ -59,12 +62,12 @@ export const Login: React.FC = () => {
         }
       } else {
         const { error } = await supabase.auth.signInWithPassword({
-          email: email.trim(),
+          email: trimmedEmail,
           password,
         });
         
         if (error) {
-          const isMasterEmail = email.toLowerCase().trim() === 'valmiroliveirant@gmail.com';
+          const isMasterEmail = lowerEmail === 'valmiroliveirant@gmail.com';
           
           if (error.message === 'Invalid login credentials') {
             throw new Error(

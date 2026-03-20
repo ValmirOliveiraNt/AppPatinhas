@@ -21,7 +21,7 @@ interface HomeProps {
 }
 
 export const Home: React.FC<HomeProps> = ({ onNavigate }) => {
-  const { user, loading, isAdmin, isMaster } = useSupabase();
+  const { user, profile, loading, isAdmin, isMaster } = useSupabase();
 
   const handleLogout = async () => {
     const supabase = getSupabase();
@@ -43,7 +43,7 @@ export const Home: React.FC<HomeProps> = ({ onNavigate }) => {
     );
   }
 
-  const displayName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'Protetor';
+  const displayName = profile?.full_name || user.user_metadata?.full_name || user.email?.split('@')[0] || 'Protetor';
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F3F4F6] font-sans text-gray-800">

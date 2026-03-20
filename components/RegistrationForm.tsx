@@ -193,7 +193,7 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
         fullName: formData.fullName,
         cpf: formData.cpf,
         phone: formData.phone,
-        role: isAdmin ? formData.role : 'colaborador',
+        role: isMaster ? formData.role : (initialData?.role || 'colaborador'),
         birthDate: formData.birthDate,
         associationDate: formData.associationDate,
         registrationNumber: formData.registrationNumber,
@@ -443,25 +443,29 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
               )}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Cargo / Função</label>
-                <select 
-                  required
-                  disabled={!isAdmin}
-                  className={`block w-full rounded-xl border-gray-200 shadow-sm focus:ring-[#DAA520] focus:border-[#DAA520] ${!isAdmin ? 'bg-gray-50 text-gray-500 cursor-not-allowed' : ''}`}
-                  value={isAdmin ? formData.role : 'colaborador'}
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                >
-                  <option value="colaborador">Colaborador</option>
-                  {isAdmin && (
-                    <>
-                      <option value="diretoria">Diretoria</option>
-                      <option value="master">Master (Proprietário)</option>
-                      <option value="voluntario">Voluntário</option>
-                      <option value="apoio">Apoio</option>
-                    </>
-                  )}
-                </select>
-                {!isAdmin && (
-                  <p className="text-[10px] text-gray-400 mt-1 italic">* Apenas administradores podem alterar o cargo.</p>
+                {isMaster && initialData ? (
+                  <select 
+                    required
+                    className="block w-full rounded-xl border-gray-200 shadow-sm focus:ring-[#DAA520] focus:border-[#DAA520]"
+                    value={formData.role}
+                    onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                  >
+                    <option value="colaborador">Colaborador</option>
+                    <option value="diretoria">Diretoria</option>
+                    <option value="master">Master (Proprietário)</option>
+                    <option value="voluntario">Voluntário</option>
+                    <option value="apoio">Apoio</option>
+                  </select>
+                ) : (
+                  <div className="block w-full rounded-xl border-gray-200 shadow-sm bg-gray-50 text-gray-700 px-4 py-2.5 font-medium">
+                    {formData.role.charAt(0).toUpperCase() + formData.role.slice(1)}
+                    {!isMaster && (
+                      <p className="text-[10px] text-gray-400 mt-1 italic font-normal">* Apenas o usuário Master pode alterar o nível de permissão.</p>
+                    )}
+                    {isMaster && !initialData && (
+                      <p className="text-[10px] text-amber-600 mt-1 italic font-normal">* O cargo inicial é definido como Colaborador e pode ser alterado após o cadastro.</p>
+                    )}
+                  </div>
                 )}
               </div>
             </div>

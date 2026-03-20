@@ -162,6 +162,7 @@ export const dbService = {
       }
 
       if (id) {
+        console.log(`Updating existing member with id ${id}...`);
         const { error } = await supabase
           .from('members')
           .update(mapMemberToSupabase(member))
@@ -170,13 +171,38 @@ export const dbService = {
           console.error(`Error in saveMember (update) for id ${id}:`, error);
           throw error;
         }
+
+        // If role or fullName is being updated, also update the profiles table
+        if (member.role || member.fullName) {
+          console.log(`Profile update detected for member ${id}`);
+          // We need the UID to update the profile
+          const { data: memberData } = await supabase
+            .from('members')
+            .select('uid, full_name, role')
+            .eq('id', id)
+            .single();
+          
+          if (memberData?.uid) {
+            console.log(`Found UID ${memberData.uid} for member ${id}, updating profile...`);
+            await dbService.updateUserProfile(memberData.uid, memberData.role, memberData.full_name);
+          } else {
+            console.warn(`No UID found for member ${id}, cannot update profile.`);
+          }
+        }
       } else {
+        console.log('Inserting new member...');
         const { error } = await supabase
           .from('members')
           .insert([mapMemberToSupabase(member)]);
         if (error) {
           console.error('Error in saveMember (insert):', error);
           throw error;
+        }
+
+        // If it's a new member and has a UID, update the profile
+        if (member.uid) {
+          console.log(`New member has UID ${member.uid}, updating profile...`);
+          await dbService.updateUserProfile(member.uid, member.role || 'colaborador', member.fullName || null);
         }
       }
     } catch (error: any) {
@@ -292,24 +318,101 @@ export const dbService = {
       // Atualiza na tabela de membros (para a carteirinha)
       const { error: memberError } = await supabase.from('members').update({ role }).eq('id', id);
       if (memberError) {
-        console.error(`Error updating member role for id ${id}:`, memberError);
+        console.error(`Error updating member role for id ${id}:`, {
+          message: memberError.message,
+          details: memberError.details,
+          hint: memberError.hint,
+          code: memberError.code
+        });
         throw memberError;
       }
 
-      // Busca o UID do membro para atualizar a tabela de perfis (permissões)
-      const { data: memberData, error: fetchError } = await supabase.from('members').select('uid').eq('id', id).single();
+      // Busca o UID e Nome do membro para atualizar a tabela de perfis (permissões)
+      const { data: memberData, error: fetchError } = await supabase.from('members').select('uid, full_name').eq('id', id).single();
       if (fetchError) {
-        console.error(`Error fetching member UID for role update, id ${id}:`, fetchError);
+        console.error(`Error fetching member data for role update, id ${id}:`, {
+          message: fetchError.message,
+          details: fetchError.details,
+          hint: fetchError.hint,
+          code: fetchError.code
+        });
       }
 
       if (memberData?.uid) {
-        const { error: profileError } = await supabase.from('profiles').update({ role }).eq('id', memberData.uid);
-        if (profileError) {
-          console.warn('Aviso: Não foi possível atualizar a tabela de perfis, mas o cargo na carteirinha foi alterado.', profileError);
-        }
+        await dbService.updateUserProfile(memberData.uid, role, memberData.full_name);
       }
     } catch (error: any) {
-      console.error('Unexpected error in updateMemberRole:', error);
+      console.error('Unexpected error in updateMemberRole:', {
+        message: error?.message || 'No message',
+        details: error?.details || 'No details',
+        error: error
+      });
+      throw error;
+    }
+  },
+
+  updateUserProfile: async (uid: string, role: string, fullName: string | null): Promise<void> => {
+    const supabase = getSupabase();
+    if (!supabase) throw new Error('Supabase not configured');
+
+    if (!uid) {
+      console.warn('Cannot update user profile: UID is missing');
+      return;
+    }
+
+    console.log(`Attempting to update/upsert profile for user '${uid}' in profiles table...`);
+
+    try {
+      const profileData: any = { 
+        id: uid, 
+        updated_at: new Date().toISOString()
+      };
+      
+      if (role) profileData.role = role;
+      if (fullName) profileData.full_name = fullName;
+
+      // Use upsert to ensure the profile exists and has the correct role and name
+      const { data, error } = await supabase
+        .from('profiles')
+        .upsert(profileData, { 
+          onConflict: 'id' 
+        })
+        .select();
+      
+      if (error) {
+        console.error(`Error in updateUserProfile for uid ${uid}:`, {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        });
+        throw error;
+      }
+      console.log(`Successfully updated profile for user '${uid}'. Result:`, data);
+    } catch (error: any) {
+      console.error('Unexpected error in updateUserProfile:', {
+        message: error?.message || 'No message',
+        details: error?.details || 'No details',
+        error: error
+      });
+      throw error;
+    }
+  },
+
+  getAllProfiles: async (): Promise<any[]> => {
+    const supabase = getSupabase();
+    if (!supabase) throw new Error('Supabase not configured');
+
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('full_name', { ascending: true });
+      
+      if (error) throw error;
+      return data || [];
+    } catch (error: any) {
+      console.error('Error fetching profiles:', error);
       throw error;
     }
   },
